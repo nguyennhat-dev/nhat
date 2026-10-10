@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d111d">
+<title>Nguyễn Nhật</title>
+<style>
+:root{--bg:#0d111d;--card:#141a2a;--line:#262d45;--text:#eef0f6;--dim:#8d93a8;--acc:#f0b254}
+*{box-sizing:border-box;margin:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px 16px 40px}
+.app{max-width:520px;margin:0 auto;display:grid;gap:20px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+h1{font-size:1.5rem;font-weight:650}
+.clock{font-variant-numeric:tabular-nums;font-size:1.7rem;font-weight:300;color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px 20px;display:grid;gap:22px}
+.disc{width:min(64vw,260px);aspect-ratio:1;margin:4px auto;border-radius:50%;position:relative;
+ background:repeating-radial-gradient(circle,#1b2136 0 2px,#10142115 2px 4px),radial-gradient(circle,#232a44,#0e1220);
+ box-shadow:0 18px 40px #0008,inset 0 0 0 2px #2a3150;animation:spin 6s linear infinite;animation-play-state:paused;will-change:transform}
+.disc::after{content:"";position:absolute;inset:36%;border-radius:50%;background:var(--acc);box-shadow:0 0 0 7px #0d111d}
+.disc.spin{animation-play-state:running}
+@keyframes spin{to{transform:rotate(360deg)}}
+.info{text-align:center}
+.title{font-size:1.25rem;font-weight:600;overflow-wrap:anywhere}
+.sub{color:var(--dim);font-size:.95rem;margin-top:6px}
+.row{display:flex;align-items:center;gap:14px}
+.time{font-size:.95rem;color:var(--dim);font-variant-numeric:tabular-nums;min-width:38px}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;width:100%;height:6px;border-radius:3px;cursor:pointer;outline:none;
+ background:linear-gradient(to right,var(--acc) var(--p,0%),var(--line) var(--p,0%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:16px;border-radius:8px;background:#fff;box-shadow:0 1px 4px #0006}
+input[type=range]::-moz-range-thumb{width:26px;height:16px;border:0;border-radius:8px;background:#fff}
+button{font:inherit;color:var(--text);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+input[type=range]{touch-action:pan-y}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.ctrl{justify-content:center;gap:18px}
+.round{width:52px;height:52px;border-radius:50%;background:transparent;border:1px solid var(--line);display:grid;place-items:center;padding:0}
+.round svg{width:22px;height:22px;fill:currentColor}
+.round:hover{border-color:var(--acc)}
+.big{width:72px;height:72px;background:var(--acc);border:0;color:#1a1306}
+.big svg{width:28px;height:28px}
+.pills{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.pill{background:transparent;border:1px solid var(--line);border-radius:999px;padding:11px 20px}
+.pill:hover{border-color:var(--acc)}
+.pill[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:#1a1306;font-weight:600}
+#mute .x{display:none}#mute.off .x{display:block}#mute.off .w{display:none}
+.sec{border-top:1px solid var(--line);padding-top:20px;display:grid;gap:14px}
+.sec h2{font-size:1.05rem;font-weight:600}
+.sec .pills{justify-content:flex-start}
+.drop{border:2px dashed var(--line);border-radius:16px;padding:18px;text-align:center;color:var(--dim);transition:.15s;display:grid;gap:12px;justify-items:center}
+.drop.over{border-color:var(--acc);color:var(--text);background:#1a2036}
+ul{list-style:none;padding:0;display:grid;gap:4px;max-height:50vh;overflow-y:auto}
+li{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;border-radius:12px;cursor:pointer}
+li:hover{background:#1b2236}
+li.on{background:#2a2416;color:var(--acc)}
+li{align-items:center}
+li span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+li span:nth-child(2){color:var(--dim);font-size:.85rem;font-variant-numeric:tabular-nums}
+.del{background:none;border:0;color:var(--dim);font-size:1rem;padding:2px 6px;border-radius:8px}
+.del:hover{color:var(--acc)}
+.empty{color:var(--dim);text-align:center;padding:16px 0}
+@media(prefers-reduced-motion:reduce){.disc{animation:none}*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Nguyễn Nhật</h1>
+    <div class="clock" id="clock">00:00:00</div>
+  </header>
+
+  <main class="card">
+    <div class="disc" id="disc" aria-hidden="true"></div>
+    <div class="info">
+      <div class="title" id="title">Chưa có bài hát</div>
+      <div class="sub" id="status">Thêm nhạc từ thiết bị của bạn</div>
+    </div>
+
+    <div class="row">
+      <span class="time" id="cur">0:00</span>
+      <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Thanh tiến trình">
+      <span class="time" id="dur" style="text-align:right">0:00</span>
+    </div>
+
+    <div class="row ctrl">
+      <button class="round" id="prev" aria-label="Bài trước"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button class="round big" id="play" aria-label="Phát hoặc tạm dừng"><svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg></button>
+      <button class="round" id="next" aria-label="Bài tiếp theo"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+    </div>
+
+    <div class="pills">
+      <button class="pill" id="shuffle" aria-pressed="false">Trộn bài: Tắt</button>
+      <button class="pill" id="repeat" aria-pressed="false">Lặp lại: Tắt</button>
+    </div>
+
+    <div class="row">
+      <button class="round" id="mute" aria-label="Tắt tiếng"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7l-1.4-1.4a3 3 0 0 0 0-4.2zM18 6a8.5 8.5 0 0 1 0 12l-1.4-1.4a6.5 6.5 0 0 0 0-9.2z"/><path class="x" d="M15 9.4 16.4 8l2.1 2.1L20.6 8 22 9.4 19.9 11.5 22 13.6 20.6 15l-2.1-2.1L16.4 15 15 13.6l2.1-2.1z"/></svg></button>
+      <input type="range" id="vol" min="0" max="100" value="80" aria-label="Âm lượng">
+    </div>
+
+    <section class="sec">
+      <h2>Cân bằng âm lượng tự động</h2>
+      <div class="pills"><button class="pill" id="norm" aria-pressed="true">Đang bật</button></div>
+    </section>
+
+    <section class="sec">
+      <h2>Crossfade giữa các bài</h2>
+      <div class="pills">
+        <button class="pill" id="xf" aria-pressed="false">Đã tắt</button>
+        
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Hẹn giờ tắt nhạc</h2>
+      <div class="pills" id="sleepPills">
+        <button class="pill" data-m="0" aria-pressed="true">Tắt</button>
+        <button class="pill" data-m="15" aria-pressed="false">15 phút</button>
+        <button class="pill" data-m="30" aria-pressed="false">30 phút</button>
+        <button class="pill" data-m="45" aria-pressed="false">45 phút</button>
+        <button class="pill" data-m="60" aria-pressed="false">60 phút</button>
+      </div>
+      <div class="sub" id="sleepInfo" style="margin:0">Chưa hẹn giờ tắt nhạc</div>
+    </section>
+  </main>
+
+  <section class="card" aria-label="Danh sách phát">
+    <div class="drop" id="drop">
+      <span>Kéo và thả file nhạc vào đây (.mp3, .wav, .m4a). Nhạc được lưu trong trình duyệt, lần sau mở lại vẫn còn.</span>
+      <div class="pills"><button class="pill" id="pick">Chọn file nhạc</button><button class="pill" id="clear">Xóa danh sách</button></div>
+      <input type="file" id="file" accept=".mp3,.wav,.m4a,audio/*" multiple hidden>
+    </div>
+    <ul id="list"></ul>
+  </section>
+</div>
+
+<script>
+"use strict";
+/* Biểu tượng nút phát / tạm dừng */
+const PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg>';
+const PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+/* Tô màu phần đã chạy của thanh trượt */
+const fill = el => el.style.setProperty("--p", (el.value - el.min) / (el.max - el.min) * 100 + "%");
+const XF = 6;                                  // thời gian crossfade cố định (giây)
+const SILENT = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAIARKwAABCxAgAEABAAZGF0YQQAAAAAAAAA";
+const pauseAll = () => { decks.forEach(d => d.el.pause()); fading = false; };
+
+/* Media Session: hiện tên bài + nút điều khiển trên màn hình khóa / thông báo,
+   và giúp hệ điều hành giữ nhạc phát khi tắt màn hình hoặc chuyển ứng dụng. */
+function initSession() {
+  if (!("mediaSession" in navigator)) return;
+  const set = (n, f) => { try { navigator.mediaSession.setActionHandler(n, f); } catch (e) {} };
+  set("play", () => { ctx.resume(); decks[active].el.play().catch(() => {}); });
+  set("pause", pauseAll);
+  set("previoustrack", () => { if (order.length) prev(); });
+  set("nexttrack", () => { if (order.length) next(xfOn); });
+  set("seekto", d => { decks[active].el.currentTime = d.seekTime; });
+  set("seekbackward", () => { decks[active].el.currentTime -= 10; });
+  set("seekforward", () => { decks[active].el.currentTime += 10; });
+}
+function sessionMeta(p) {
+  if ("mediaSession" in navigator && window.MediaMetadata)
+    navigator.mediaSession.metadata = new MediaMetadata({ title: tracks[order[p]].name, artist: "Nguyễn Nhật", album: "Nhạc của tôi" });
+}
+let lastPos = 0;
+function updatePos(el) {                         // cập nhật thanh tiến trình trên màn hình khóa (1 lần/giây)
+  const now = Date.now();
+  if (now - lastPos < 1000 || !el.duration || !navigator.mediaSession || !navigator.mediaSession.setPositionState) return;
+  lastPos = now;
+  try { navigator.mediaSession.setPositionState({ duration: el.duration, position: Math.min(el.currentTime, el.duration), playbackRate: 1 }); } catch (e) {}
+}
+/* ============ TIỆN ÍCH ============ */
+const $ = s => document.querySelector(s);
+const fmt = s => { if (!isFinite(s)) return "0:00"; s = Math.floor(s); return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); };
+const pad = n => String(n).padStart(2,"0");
+
+/* ============ TRẠNG THÁI ============ */
+let tracks = [];          // {name, url, dur}
+let order = [];           // thứ tự phát (chỉ số vào tracks), đổi khi trộn bài
+let pos = -1;             // vị trí hiện tại trong order
+let repeat = 0;           // 0: tắt, 1: lặp cả danh sách, 2: lặp 1 bài
+let shuffleOn = false, normOn = true, xfOn = false, muted = false;
+let fading = false, seeking = false, fadeEnd = 0, fadeOld = null;
+
+/* ============ WEB AUDIO ============
+   Sơ đồ: deck(audio) -> deckGain -> compressor -> [analyser] -> makeup -> limiter -> sleepGain -> volume -> loa
+   - Hai "deck" (hai thẻ audio) để phát chồng nhau khi crossfade.
+   - compressor: nén đoạn nhạc to/gắt.
+   - makeup: tự tăng gain cho bài nhỏ dựa trên mức RMS đo bởi analyser.
+   - limiter: chặn đỉnh, tránh rè khi đã tăng gain. */
+let ctx, decks = [], active = 0, comp, makeup, limiter, analyser, sleepG, volG, buf;
+
+function initAudio() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  comp = ctx.createDynamicsCompressor();
+  makeup = ctx.createGain();
+  limiter = ctx.createDynamicsCompressor();
+  analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+  sleepG = ctx.createGain();
+  volG = ctx.createGain();
+  buf = new Float32Array(analyser.fftSize);
+  for (let i = 0; i < 2; i++) {
+    const el = new Audio(); el.preload = "auto";
+    const src = ctx.createMediaElementSource(el);
+    const g = ctx.createGain(); g.gain.value = i === 0 ? 1 : 0;
+    src.connect(g); g.connect(comp);
+    el.addEventListener("timeupdate", () => { if (decks[active].el === el) onTime(); });
+    el.addEventListener("ended", () => { if (decks[active].el === el) onEnded(); });
+    el.addEventListener("play", syncPlayBtn); el.addEventListener("pause", syncPlayBtn);
+    decks.push({ el, g });
+  }
+  /* Mở khóa cả hai deck ngay lần chạm đầu tiên: trình duyệt di động chỉ cho phép
+     phát tự động ở nền (khi chuyển bài lúc tắt màn hình) với thẻ audio đã được người dùng kích hoạt. */
+  decks.forEach(d => { d.el.src = SILENT; d.el.play().then(() => { if (d.el.src === SILENT) d.el.pause(); }).catch(() => {}); });
+  /* Nếu hệ thống tạm ngắt AudioContext (khóa màn hình, cuộc gọi...) thì tự bật lại khi còn đang phát */
+  ctx.onstatechange = () => { if (ctx.state !== "running" && decks.some(x => !x.el.paused)) ctx.resume().catch(() => {}); };
+  document.addEventListener("visibilitychange", () => { if (ctx.state !== "running" && decks.some(x => !x.el.paused)) ctx.resume().catch(() => {}); });
+  comp.connect(analyser); comp.connect(makeup);
+  makeup.connect(limiter); limiter.connect(sleepG); sleepG.connect(volG); volG.connect(ctx.destination);
+  applyNorm(); applyVolume();
+  initSession();
+  setInterval(autoGainLoop, 250);
+}
+
+/* Bật/tắt bộ cân bằng: khi tắt thì compressor/limiter không nén (ratio = 1) và makeup = 1 */
+function applyNorm() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  if (normOn) {
+    comp.threshold.setValueAtTime(-26, t); comp.knee.setValueAtTime(20, t); comp.ratio.setValueAtTime(6, t);
+    comp.attack.setValueAtTime(0.005, t);  comp.release.setValueAtTime(0.25, t);
+    limiter.threshold.setValueAtTime(-3, t); limiter.knee.setValueAtTime(0, t); limiter.ratio.setValueAtTime(20, t);
+    limiter.attack.setValueAtTime(0.002, t); limiter.release.setValueAtTime(0.1, t);
+  } else {
+    comp.ratio.setValueAtTime(1, t); limiter.ratio.setValueAtTime(1, t);
+    comp.threshold.setValueAtTime(0, t); limiter.threshold.setValueAtTime(0, t);
+    makeup.gain.setTargetAtTime(1, t, 0.2);
+  }
+}
+
+/* Tự tăng âm: đo RMS sau compressor, rồi đẩy gain về mức mục tiêu (-18 dBFS).
+   Giới hạn gain từ 0.7x đến 3x (khoảng +9.5 dB) và thay đổi chậm cho mượt. */
+function autoGainLoop() {
+  if (!normOn || !ctx || decks[active].el.paused) return;
+  analyser.getFloatTimeDomainData(buf);
+  let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  const rms = Math.sqrt(sum / buf.length);
+  if (rms < 0.003) return;                       // im lặng -> giữ nguyên
+  const want = Math.min(3, Math.max(0.7, 0.126 / rms));
+  makeup.gain.setTargetAtTime(want, ctx.currentTime, 0.6);
+}
+
+function applyVolume() {
+  if (!ctx) return;
+  const v = $("#vol").value / 100;
+  volG.gain.setTargetAtTime(muted ? 0 : v * v, ctx.currentTime, 0.03); // v² cho cảm giác tuyến tính hơn
+  $("#mute").classList.toggle("off", muted || v === 0); fill($("#vol"));
+}
+
+/* ============ NẠP FILE ============ */
+/* ============ LƯU TRỮ LÂU DÀI (IndexedDB) ============
+   Mỗi bài được lưu cả file nhạc (blob) trong trình duyệt để lần sau mở lại không phải thêm lại.
+   Hoạt động ngoại tuyến hoàn toàn, không cần mạng. */
+let db = null;
+const dbOpen = () => new Promise(res => {
+  try {
+    const r = indexedDB.open("nguyen-nhat-player", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("t", { keyPath: "id", autoIncrement: true });
+    r.onsuccess = () => res(r.result); r.onerror = () => res(null);
+  } catch (e) { res(null); }
+});
+const dbPut = rec => new Promise(res => {
+  if (!db) return res(null);
+  const q = db.transaction("t", "readwrite").objectStore("t").add(rec);
+  q.onsuccess = () => res(q.result); q.onerror = () => res(null);
+});
+const dbAll = () => new Promise(res => {
+  if (!db) return res([]);
+  const q = db.transaction("t").objectStore("t").getAll();
+  q.onsuccess = () => res(q.result); q.onerror = () => res([]);
+});
+const dbDel = id => { if (db && id != null) db.transaction("t", "readwrite").objectStore("t").delete(id); };
+const dbClear = () => { if (db) db.transaction("t", "readwrite").objectStore("t").clear(); };
+
+/* Tạo một bài trong danh sách từ file/blob và đọc thời lượng */
+const dbSetDur = t => {
+  if (!db || t.id == null) return;
+  const st = db.transaction("t", "readwrite").objectStore("t"), g = st.get(t.id);
+  g.onsuccess = () => { if (g.result) { g.result.dur = t.dur; st.put(g.result); } };
+};
+/* Đọc thời lượng lần lượt bằng một thẻ audio tạm (thay vì tạo hàng loạt thẻ cùng lúc) */
+const metaQ = []; let metaBusy = false;
+function pumpMeta() {
+  if (metaBusy || !metaQ.length) return;
+  metaBusy = true;
+  const t = metaQ.shift(), a = new Audio(); a.preload = "metadata";
+  const done = () => { a.removeAttribute("src"); metaBusy = false; pumpMeta(); };
+  a.onloadedmetadata = () => { t.dur = a.duration; dbSetDur(t); renderList(); done(); };
+  a.onerror = done; a.src = t.url;
+}
+function mkTrack(name, blob, id, dur) {
+  const t = { name, url: URL.createObjectURL(blob), dur: dur || 0, id };
+  tracks.push(t); order.push(tracks.length - 1);
+  if (!t.dur) { metaQ.push(t); pumpMeta(); }
+  return t;
+}
+
+/* Đưa bộ phát về trạng thái trống */
+function resetNow() {
+  if (ctx) decks.forEach(d => d.el.pause());
+  pos = -1;
+  $("#title").textContent = "Chưa có bài hát";
+  $("#seek").value = 0; fill($("#seek"));
+  $("#cur").textContent = "0:00"; $("#dur").textContent = "0:00";
+}
+
+/* Xóa một bài khỏi danh sách và khỏi bộ nhớ trình duyệt */
+function removeAt(p) {
+  const ti = order[p], t = tracks[ti];
+  dbDel(t.id); URL.revokeObjectURL(t.url);
+  tracks.splice(ti, 1);
+  order = order.filter((_, i) => i !== p).map(x => x > ti ? x - 1 : x);
+  if (p < pos) pos--;
+  else if (p === pos) { if (order.length) { play(Math.min(p, order.length - 1), false); } else resetNow(); }
+  renderList();
+}
+
+function addFiles(files) {
+  const ok = [...files].filter(f => /\.(mp3|wav|m4a)$/i.test(f.name) || f.type.startsWith("audio/"));
+  ok.forEach(f => {
+    const t = mkTrack(f.name.replace(/\.[^.]+$/, ""), f, null);
+    dbPut({ name: t.name, blob: f }).then(id => { t.id = id; if (t.dur) dbSetDur(t); });   // lưu lâu dài
+  });
+  if (ok.length) { if (shuffleOn) reshuffle(); renderList(); if (pos < 0) play(0, false); }
+}
+
+let rq = 0;
+function renderList() { if (!rq) rq = requestAnimationFrame(() => { rq = 0; drawList(); }); }
+function drawList() {
+  const ul = $("#list");
+  if (!tracks.length) { ul.innerHTML = '<li class="empty" style="justify-content:center;cursor:default">Danh sách đang trống</li>'; return; }
+  ul.innerHTML = "";
+  order.forEach((ti, p) => {
+    const li = document.createElement("li");
+    if (p === pos) li.className = "on";
+    li.innerHTML = "<span></span><span>" + fmt(tracks[ti].dur) + '</span><button class="del" aria-label="Xóa bài này">✕</button>';
+    li.firstChild.textContent = tracks[ti].name;
+    li.onclick = () => { initAudio(); play(p, xfOn); };
+    li.querySelector(".del").onclick = ev => { ev.stopPropagation(); removeAt(p); };
+    ul.appendChild(li);
+  });
+}
+
+/* ============ ĐIỀU KHIỂN PHÁT ============ */
+/* Phát bài ở vị trí p. Nếu fade = true và đang có nhạc thì crossfade giữa hai deck. */
+function play(p, fade) {
+  initAudio();
+  if (p < 0 || p >= order.length) return;
+  if (ctx.state === "suspended") ctx.resume();
+  const old = decks[active], nxt = decks[1 - active];
+  const t = ctx.currentTime, d = XF;
+  const doFade = fade && xfOn && !old.el.paused;
+  pos = p;
+  nxt.el.src = tracks[order[p]].url;
+  nxt.el.currentTime = 0;
+  nxt.g.gain.cancelScheduledValues(t); old.g.gain.cancelScheduledValues(t);
+  if (doFade) {
+    nxt.g.gain.setValueAtTime(0, t); nxt.g.gain.linearRampToValueAtTime(1, t + d);   // bài mới to dần
+    old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0, t + d); // bài cũ nhỏ dần
+    fading = true;
+    fadeEnd = t + d; fadeOld = old;     // onTime sẽ dừng deck cũ khi hết crossfade
+  } else {
+    old.el.pause(); old.g.gain.setValueAtTime(0, t); nxt.g.gain.setValueAtTime(1, t); fading = false;
+  }
+  active = 1 - active;
+  nxt.el.play().catch(() => {}); syncPlayBtn(); sessionMeta(p);
+  $("#title").textContent = tracks[order[p]].name;
+  renderList();
+}
+
+function nextPos() {
+  if (pos + 1 < order.length) return pos + 1;
+  return repeat === 1 ? 0 : -1;
+}
+function next(fade) { const n = nextPos(); if (n >= 0) play(n, fade); else decks[active].el.pause(); }
+function prev() {
+  const el = decks[active].el;
+  if (el.currentTime > 3) { el.currentTime = 0; return; }  // >3s thì quay lại đầu bài
+  play(pos > 0 ? pos - 1 : order.length - 1, xfOn);
+}
+
+function onEnded() {
+  if (repeat === 2) { const el = decks[active].el; el.currentTime = 0; el.play(); return; }
+  if (!fading) next(false);
+}
+
+/* Cập nhật thanh tiến trình và kích hoạt crossfade trước khi hết bài */
+function onTime() {
+  const el = decks[active].el;
+  if (!seeking && el.duration) { $("#seek").value = (el.currentTime / el.duration) * 1000; fill($("#seek")); }
+  $("#cur").textContent = fmt(el.currentTime);
+  $("#dur").textContent = fmt(el.duration);
+  const d = XF;
+  if (fading && ctx.currentTime >= fadeEnd) { fadeOld.el.pause(); fading = false; }
+  if (sleepEnd) sleepTick();
+  updatePos(el);
+  if (xfOn && !fading && repeat !== 2 && el.duration > d * 2 && el.duration - el.currentTime <= d && nextPos() >= 0) next(true);
+}
+
+function syncPlayBtn() {
+  const playing = decks.some(x => !x.el.paused);
+  $("#play").innerHTML = playing ? PAUSE : PLAY; $("#disc").classList.toggle("spin", playing);
+  if ("mediaSession" in navigator) navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+  $("#status").textContent = tracks.length ? (playing ? "Đang phát" : "Đã tạm dừng") : "Thêm nhạc từ thiết bị để bắt đầu";
+}
+
+function reshuffle() {
+  const curTrack = pos >= 0 ? order[pos] : -1;
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  if (curTrack >= 0) { const k = order.indexOf(curTrack); [order[0], order[k]] = [order[k], order[0]]; pos = 0; }
+}
+
+/* ============ SỰ KIỆN GIAO DIỆN ============ */
+$("#pick").onclick = () => $("#file").click();
+$("#file").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
+const drop = $("#drop");
+["dragenter","dragover"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (ev === "drop" || e.target === document.documentElement) drop.classList.remove("over"); }));
+document.addEventListener("drop", e => { if (e.dataTransfer) addFiles(e.dataTransfer.files); });
+
+$("#play").onclick = () => {
+  initAudio();
+  if (pos < 0) { if (tracks.length) play(0, false); return; }
+  const el = decks[active].el;
+  if (ctx.state === "suspended") ctx.resume();
+  if (el.paused) el.play().catch(() => {}); else pauseAll();
+  syncPlayBtn();                                  // đổi biểu tượng ngay, không chờ sự kiện của thẻ audio
+};
+$("#next").onclick = () => { initAudio(); if (order.length) next(xfOn); };
+$("#prev").onclick = () => { initAudio(); if (order.length) prev(); };
+
+const seek = $("#seek");
+seek.oninput = () => { seeking = true; fill(seek); const el = decks[active].el; $("#cur").textContent = fmt(seek.value / 1000 * el.duration); };
+seek.onchange = () => { const el = decks[active].el; if (el.duration) el.currentTime = seek.value / 1000 * el.duration; seeking = false; };
+
+$("#vol").oninput = () => { muted = false; applyVolume(); fill($("#vol")); };
+$("#mute").onclick = () => { initAudio(); muted = !muted; applyVolume(); };
+
+function toggle(btn, on) { btn.setAttribute("aria-pressed", on); }
+$("#shuffle").onclick = e => {
+  shuffleOn = !shuffleOn; toggle(e.target, shuffleOn); e.target.textContent = "Trộn bài: " + (shuffleOn ? "Bật" : "Tắt");
+  if (shuffleOn) reshuffle(); else { const c = pos >= 0 ? order[pos] : -1; order = tracks.map((_, i) => i); pos = c; }
+  renderList();
+};
+$("#repeat").onclick = e => {
+  repeat = (repeat + 1) % 3;
+  e.target.textContent = ["Lặp lại: Tắt", "Lặp lại: Cả danh sách", "Lặp lại: 1 bài"][repeat];
+  toggle(e.target, repeat > 0);
+};
+$("#norm").onclick = e => {
+  initAudio(); normOn = !normOn; applyNorm();
+  e.target.textContent = (normOn ? "Đang bật" : "Đã tắt"); toggle(e.target, normOn);
+};
+$("#xf").onclick = e => {
+  xfOn = !xfOn; e.target.textContent = (xfOn ? "Đang bật" : "Đã tắt"); toggle(e.target, xfOn);
+};
+
+/* ============ ĐỒNG HỒ & HẸN GIỜ TẮT NHẠC ============ */
+let sleepEnd = 0, sleepFading = false;
+function setSleep(m) {
+  document.querySelectorAll("#sleepPills button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.m === m));
+  sleepFading = false; sleepEnd = m ? Date.now() + m * 60000 : 0;
+  if (ctx) {
+    const t = ctx.currentTime;
+    sleepG.gain.cancelScheduledValues(t); sleepG.gain.setValueAtTime(1, t);
+    if (m) {                                     // hẹn sẵn đoạn nhỏ dần trên đồng hồ âm thanh: vẫn đúng giờ dù trang chạy nền
+      sleepG.gain.setValueAtTime(1, t + m * 60 - 10); sleepG.gain.linearRampToValueAtTime(0, t + m * 60);
+    }
+  }
+  $("#sleepInfo").textContent = m ? "Tắt nhạc sau " + fmt(m * 60) : "Chưa hẹn giờ tắt nhạc";
+}
+function sleepTick() {
+  if (!sleepEnd) return;
+  const left = (sleepEnd - Date.now()) / 1000;
+  $("#sleepInfo").textContent = "Tắt nhạc sau " + fmt(Math.max(0, left));
+  if (left <= 10 && !sleepFading && ctx) {       // 10 giây cuối: nhỏ dần
+    sleepFading = true;
+    sleepG.gain.cancelScheduledValues(ctx.currentTime);
+    sleepG.gain.setValueAtTime(sleepG.gain.value, ctx.currentTime);
+    sleepG.gain.linearRampToValueAtTime(0, ctx.currentTime + Math.max(left, 0.5));
+  }
+  if (left <= 0) {                               // hết giờ: dừng hẳn và trả gain về 1
+    pauseAll();
+    if (ctx) { sleepG.gain.cancelScheduledValues(ctx.currentTime); sleepG.gain.setValueAtTime(1, ctx.currentTime); }
+    setSleep(0); $("#sleepInfo").textContent = "Đã tắt nhạc theo hẹn giờ";
+  }
+}
+setInterval(() => {
+  const n = new Date();
+  $("#clock").textContent = pad(n.getHours()) + ":" + pad(n.getMinutes()) + ":" + pad(n.getSeconds());
+  sleepTick();
+}, 1000);
+
+/* Gắn sự kiện cho các nút hẹn giờ và tô màu thanh trượt ban đầu */
+document.querySelectorAll("#sleepPills button").forEach(b => b.onclick = () => setSleep(+b.dataset.m));
+fill($("#vol")); fill($("#seek")); renderList();
+
+/* Xóa toàn bộ danh sách */
+$("#clear").onclick = () => {
+  if (!tracks.length || !confirm("Xóa toàn bộ danh sách nhạc đã lưu?")) return;
+  tracks.forEach(t => URL.revokeObjectURL(t.url));
+  tracks = []; order = []; dbClear(); resetNow(); renderList();
+};
+
+/* Khi mở lại: nạp danh sách đã lưu (chưa tự phát) và xin trình duyệt giữ dữ liệu bền vững */
+(async () => {
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  db = await dbOpen();
+  const saved = await dbAll();
+  saved.forEach(r => mkTrack(r.name, r.blob, r.id, r.dur));
+  if (saved.length) { renderList(); $("#status").textContent = "Đã khôi phục " + saved.length + " bài, bấm phát để nghe"; }
+})();
+</script>
+</body>
+</html>
