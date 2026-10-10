@@ -14,14 +14,8 @@ header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 h1{font-size:1.5rem;font-weight:650}
 .clock{font-variant-numeric:tabular-nums;font-size:1.7rem;font-weight:300;color:var(--acc)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px 20px;display:grid;gap:22px}
-.disc{width:min(64vw,260px);aspect-ratio:1;margin:4px auto;border-radius:50%;position:relative;
- background:repeating-radial-gradient(circle,#1b2136 0 2px,#10142115 2px 4px),radial-gradient(circle,#232a44,#0e1220);
- box-shadow:0 18px 40px #0008,inset 0 0 0 2px #2a3150;animation:spin 6s linear infinite;animation-play-state:paused;will-change:transform}
-.disc::after{content:"";position:absolute;inset:36%;border-radius:50%;background:var(--acc);box-shadow:0 0 0 7px #0d111d}
-.disc.spin{animation-play-state:running}
-@keyframes spin{to{transform:rotate(360deg)}}
 .info{text-align:center}
-.title{font-size:1.25rem;font-weight:600;overflow-wrap:anywhere}
+.title{font-size:1.5rem;font-weight:650;overflow-wrap:anywhere}
 .sub{color:var(--dim);font-size:.95rem;margin-top:6px}
 .row{display:flex;align-items:center;gap:14px}
 .time{font-size:.95rem;color:var(--dim);font-variant-numeric:tabular-nums;min-width:38px}
@@ -58,7 +52,7 @@ li span:nth-child(2){color:var(--dim);font-size:.85rem;font-variant-numeric:tabu
 .del{background:none;border:0;color:var(--dim);font-size:1rem;padding:2px 6px;border-radius:8px}
 .del:hover{color:var(--acc)}
 .empty{color:var(--dim);text-align:center;padding:16px 0}
-@media(prefers-reduced-motion:reduce){.disc{animation:none}*{transition:none!important}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
@@ -69,8 +63,7 @@ li span:nth-child(2){color:var(--dim);font-size:.85rem;font-variant-numeric:tabu
   </header>
 
   <main class="card">
-    <div class="disc" id="disc" aria-hidden="true"></div>
-    <div class="info">
+        <div class="info">
       <div class="title" id="title">Chưa có bài hát</div>
       <div class="sub" id="status">Thêm nhạc từ thiết bị của bạn</div>
     </div>
@@ -142,14 +135,14 @@ const PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></
 const fill = el => el.style.setProperty("--p", (el.value - el.min) / (el.max - el.min) * 100 + "%");
 const XF = 6;                                  // thời gian crossfade cố định (giây)
 const SILENT = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAIARKwAABCxAgAEABAAZGF0YQQAAAAAAAAA";
-const pauseAll = () => { decks.forEach(d => d.el.pause()); fading = false; };
+const pauseAll = () => { userPaused = true; decks.forEach(d => d.el.pause()); fading = false; };
 
 /* Media Session: hiện tên bài + nút điều khiển trên màn hình khóa / thông báo,
    và giúp hệ điều hành giữ nhạc phát khi tắt màn hình hoặc chuyển ứng dụng. */
 function initSession() {
   if (!("mediaSession" in navigator)) return;
   const set = (n, f) => { try { navigator.mediaSession.setActionHandler(n, f); } catch (e) {} };
-  set("play", () => { ctx.resume(); decks[active].el.play().catch(() => {}); });
+  set("play", () => { userPaused = false; ctx.resume(); decks[active].el.play().catch(() => {}); });
   set("pause", pauseAll);
   set("previoustrack", () => { if (order.length) prev(); });
   set("nexttrack", () => { if (order.length) next(xfOn); });
@@ -179,7 +172,7 @@ let order = [];           // thứ tự phát (chỉ số vào tracks), đổi k
 let pos = -1;             // vị trí hiện tại trong order
 let repeat = 0;           // 0: tắt, 1: lặp cả danh sách, 2: lặp 1 bài
 let shuffleOn = false, normOn = true, xfOn = false, muted = false;
-let fading = false, seeking = false, fadeEnd = 0, fadeOld = null;
+let fading = false, seeking = false, fadeEnd = 0, fadeOld = null, userPaused = false;
 
 /* ============ WEB AUDIO ============
    Sơ đồ: deck(audio) -> deckGain -> compressor -> [analyser] -> makeup -> limiter -> sleepGain -> volume -> loa
@@ -206,7 +199,12 @@ function initAudio() {
     src.connect(g); g.connect(comp);
     el.addEventListener("timeupdate", () => { if (decks[active].el === el) onTime(); });
     el.addEventListener("ended", () => { if (decks[active].el === el) onEnded(); });
-    el.addEventListener("play", syncPlayBtn); el.addEventListener("pause", syncPlayBtn);
+    el.addEventListener("play", syncPlayBtn); el.addEventListener("pause", () => {
+      syncPlayBtn();
+      /* Nếu hệ thống tự dừng (không phải người dùng bấm) thì bật lại AudioContext và thử phát tiếp */
+      if (decks[active].el === el && !userPaused && !el.ended && el.currentTime > 0 && !seeking)
+        setTimeout(() => { if (!userPaused && el.paused && !el.ended) { ctx.resume().catch(() => {}); el.play().catch(() => {}); } }, 300);
+    });
     decks.push({ el, g });
   }
   /* Mở khóa cả hai deck ngay lần chạm đầu tiên: trình duyệt di động chỉ cho phép
@@ -307,7 +305,7 @@ function mkTrack(name, blob, id, dur) {
 
 /* Đưa bộ phát về trạng thái trống */
 function resetNow() {
-  if (ctx) decks.forEach(d => d.el.pause());
+  if (ctx) pauseAll();
   pos = -1;
   $("#title").textContent = "Chưa có bài hát";
   $("#seek").value = 0; fill($("#seek"));
@@ -331,7 +329,7 @@ function addFiles(files) {
     const t = mkTrack(f.name.replace(/\.[^.]+$/, ""), f, null);
     dbPut({ name: t.name, blob: f }).then(id => { t.id = id; if (t.dur) dbSetDur(t); });   // lưu lâu dài
   });
-  if (ok.length) { if (shuffleOn) reshuffle(); renderList(); if (pos < 0) play(0, false); }
+  if (ok.length) { if (shuffleOn) reshuffle(); renderList(); if (pos < 0) { $("#title").textContent = tracks[order[0]].name; $("#status").textContent = "Bấm phát để nghe"; } }
 }
 
 let rq = 0;
@@ -356,11 +354,12 @@ function drawList() {
 function play(p, fade) {
   initAudio();
   if (p < 0 || p >= order.length) return;
-  if (ctx.state === "suspended") ctx.resume();
+  if (ctx.state !== "running") ctx.resume();
   const old = decks[active], nxt = decks[1 - active];
   const t = ctx.currentTime, d = XF;
   const doFade = fade && xfOn && !old.el.paused;
   pos = p;
+  userPaused = false;
   nxt.el.src = tracks[order[p]].url;
   nxt.el.currentTime = 0;
   nxt.g.gain.cancelScheduledValues(t); old.g.gain.cancelScheduledValues(t);
@@ -409,7 +408,7 @@ function onTime() {
 
 function syncPlayBtn() {
   const playing = decks.some(x => !x.el.paused);
-  $("#play").innerHTML = playing ? PAUSE : PLAY; $("#disc").classList.toggle("spin", playing);
+  $("#play").innerHTML = playing ? PAUSE : PLAY; 
   if ("mediaSession" in navigator) navigator.mediaSession.playbackState = playing ? "playing" : "paused";
   $("#status").textContent = tracks.length ? (playing ? "Đang phát" : "Đã tạm dừng") : "Thêm nhạc từ thiết bị để bắt đầu";
 }
@@ -432,8 +431,8 @@ $("#play").onclick = () => {
   initAudio();
   if (pos < 0) { if (tracks.length) play(0, false); return; }
   const el = decks[active].el;
-  if (ctx.state === "suspended") ctx.resume();
-  if (el.paused) el.play().catch(() => {}); else pauseAll();
+  if (ctx.state !== "running") ctx.resume();
+  if (el.paused) { userPaused = false; el.play().catch(() => {}); } else pauseAll();
   syncPlayBtn();                                  // đổi biểu tượng ngay, không chờ sự kiện của thẻ audio
 };
 $("#next").onclick = () => { initAudio(); if (order.length) next(xfOn); };
@@ -518,8 +517,11 @@ $("#clear").onclick = () => {
   db = await dbOpen();
   const saved = await dbAll();
   saved.forEach(r => mkTrack(r.name, r.blob, r.id, r.dur));
-  if (saved.length) { renderList(); $("#status").textContent = "Đã khôi phục " + saved.length + " bài, bấm phát để nghe"; }
+  if (saved.length) { renderList(); $("#title").textContent = tracks[order[0]].name; $("#status").textContent = "Đã khôi phục " + saved.length + " bài, bấm phát để nghe"; }
 })();
+
+/* Lần chạm đầu tiên: tạo AudioContext và mở khóa các thẻ audio trong thao tác người dùng */
+document.addEventListener("click", initAudio, { once: true });
 </script>
 </body>
 </html>
