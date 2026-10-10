@@ -154,12 +154,13 @@ function sessionMeta(p) {
   if ("mediaSession" in navigator && window.MediaMetadata)
     navigator.mediaSession.metadata = new MediaMetadata({ title: tracks[order[p]].name, artist: "Nguyễn Nhật", album: "Nhạc của tôi" });
 }
+const curDur = el => { const t = tracks[order[pos]]; return (t && t.dur) || el.duration; };
 let lastPos = 0;
 function updatePos(el) {                         // cập nhật thanh tiến trình trên màn hình khóa (1 lần/giây)
   const now = Date.now();
-  if (now - lastPos < 1000 || !el.duration || !navigator.mediaSession || !navigator.mediaSession.setPositionState) return;
+  if (now - lastPos < 1000 || !curDur(el) || !navigator.mediaSession || !navigator.mediaSession.setPositionState) return;
   lastPos = now;
-  try { navigator.mediaSession.setPositionState({ duration: el.duration, position: Math.min(el.currentTime, el.duration), playbackRate: 1 }); } catch (e) {}
+  try { navigator.mediaSession.setPositionState({ duration: curDur(el), position: Math.min(el.currentTime, curDur(el)), playbackRate: 1 }); } catch (e) {}
 }
 /* ============ TIỆN ÍCH ============ */
 const $ = s => document.querySelector(s);
@@ -284,20 +285,54 @@ const dbClear = () => { if (db) db.transaction("t", "readwrite").objectStore("t"
 const dbSetDur = t => {
   if (!db || t.id == null) return;
   const st = db.transaction("t", "readwrite").objectStore("t"), g = st.get(t.id);
-  g.onsuccess = () => { if (g.result) { g.result.dur = t.dur; st.put(g.result); } };
+  g.onsuccess = () => { if (g.result) { g.result.dur = t.dur; g.result.dv = 2; st.put(g.result); } };
 };
-/* Đọc thời lượng lần lượt bằng một thẻ audio tạm (thay vì tạo hàng loạt thẻ cùng lúc) */
+/* Đọc thời lượng MP3 chính xác bằng cách cộng từng khung (frame) âm thanh.
+   Trình duyệt thường chỉ ước lượng theo bitrate nên file VBR hay bị sai thời lượng. */
+function mp3Duration(buf) {
+  const b = new Uint8Array(buf), n = b.length;
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46) return 0;                 // WAV: để trình duyệt tự đọc
+  if (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) return 0; // M4A: để trình duyệt tự đọc
+  const BR = { 31: [0,32,64,96,128,160,192,224,256,288,320,352,384,416,448], 32: [0,32,48,56,64,80,96,112,128,160,192,224,256,320,384],
+               33: [0,32,40,48,56,64,80,96,112,128,160,192,224,256,320], 21: [0,32,48,56,64,80,96,112,128,144,160,176,192,224,256],
+               22: [0,8,16,24,32,40,48,56,64,80,96,112,128,144,160] };
+  const SR = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+  let i = 0, total = 0, frames = 0;
+  if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) i = 10 + ((b[6] & 127) << 21 | (b[7] & 127) << 14 | (b[8] & 127) << 7 | (b[9] & 127));
+  while (i + 4 < n) {
+    if (b[i] !== 0xFF || (b[i + 1] & 0xE0) !== 0xE0) { i++; continue; }
+    const ver = (b[i + 1] >> 3) & 3, layer = (b[i + 1] >> 1) & 3, bri = b[i + 2] >> 4, sri = (b[i + 2] >> 2) & 3, pad = (b[i + 2] >> 1) & 1;
+    if (ver === 1 || layer === 0 || bri === 0 || bri === 15 || sri === 3) { i++; continue; }
+    const L = 4 - layer;                                                          // 1, 2 hoặc 3
+    const br = BR[ver === 3 ? 30 + L : (L === 1 ? 21 : 22)][bri] * 1000, sr = SR[ver][sri];
+    const samples = L === 1 ? 384 : (L === 2 || ver === 3) ? 1152 : 576;
+    const len = L === 1 ? (Math.floor(12 * br / sr) + pad) * 4 : Math.floor(samples / 8 * br / sr) + pad;
+    if (len < 4) { i++; continue; }
+    const isInfo = frames === 0 && /Xing|Info/.test(String.fromCharCode(...b.subarray(i + 4, i + 44)));
+    if (!isInfo) total += samples / sr;                                           // khung Xing/Info không chứa tiếng
+    frames++; i += len;
+  }
+  return frames > 1 ? total : 0;
+}
+const browserDur = t => new Promise(r => {
+  const a = new Audio(); a.preload = "metadata";
+  a.onloadedmetadata = () => { const x = a.duration; a.removeAttribute("src"); r(x); };
+  a.onerror = () => r(0); a.src = t.url;
+});
+/* Đo thời lượng lần lượt từng bài rồi lưu lại */
 const metaQ = []; let metaBusy = false;
-function pumpMeta() {
+async function pumpMeta() {
   if (metaBusy || !metaQ.length) return;
   metaBusy = true;
-  const t = metaQ.shift(), a = new Audio(); a.preload = "metadata";
-  const done = () => { a.removeAttribute("src"); metaBusy = false; pumpMeta(); };
-  a.onloadedmetadata = () => { t.dur = a.duration; dbSetDur(t); renderList(); done(); };
-  a.onerror = done; a.src = t.url;
+  const t = metaQ.shift();
+  let d = 0;
+  try { d = mp3Duration(await t.blob.arrayBuffer()); } catch (e) {}
+  if (!d) d = await browserDur(t);
+  if (isFinite(d) && d > 0) { t.dur = d; dbSetDur(t); renderList(); }
+  metaBusy = false; pumpMeta();
 }
 function mkTrack(name, blob, id, dur) {
-  const t = { name, url: URL.createObjectURL(blob), dur: dur || 0, id };
+  const t = { name, url: URL.createObjectURL(blob), dur: dur || 0, id, blob };
   tracks.push(t); order.push(tracks.length - 1);
   if (!t.dur) { metaQ.push(t); pumpMeta(); }
   return t;
@@ -395,15 +430,15 @@ function onEnded() {
 
 /* Cập nhật thanh tiến trình và kích hoạt crossfade trước khi hết bài */
 function onTime() {
-  const el = decks[active].el;
-  if (!seeking && el.duration) { $("#seek").value = (el.currentTime / el.duration) * 1000; fill($("#seek")); }
+  const el = decks[active].el, dur = curDur(el);
+  if (!seeking && dur) { $("#seek").value = Math.min(1000, el.currentTime / dur * 1000); fill($("#seek")); }
   $("#cur").textContent = fmt(el.currentTime);
-  $("#dur").textContent = fmt(el.duration);
+  $("#dur").textContent = fmt(dur);
   const d = XF;
   if (fading && ctx.currentTime >= fadeEnd) { fadeOld.el.pause(); fading = false; }
   if (sleepEnd) sleepTick();
   updatePos(el);
-  if (xfOn && !fading && repeat !== 2 && el.duration > d * 2 && el.duration - el.currentTime <= d && nextPos() >= 0) next(true);
+  if (xfOn && !fading && repeat !== 2 && dur > d * 2 && dur - el.currentTime <= d && nextPos() >= 0) next(true);
 }
 
 function syncPlayBtn() {
@@ -439,8 +474,8 @@ $("#next").onclick = () => { initAudio(); if (order.length) next(xfOn); };
 $("#prev").onclick = () => { initAudio(); if (order.length) prev(); };
 
 const seek = $("#seek");
-seek.oninput = () => { seeking = true; fill(seek); const el = decks[active].el; $("#cur").textContent = fmt(seek.value / 1000 * el.duration); };
-seek.onchange = () => { const el = decks[active].el; if (el.duration) el.currentTime = seek.value / 1000 * el.duration; seeking = false; };
+seek.oninput = () => { seeking = true; fill(seek); const el = decks[active].el; $("#cur").textContent = fmt(seek.value / 1000 * curDur(el)); };
+seek.onchange = () => { const el = decks[active].el; if (curDur(el)) el.currentTime = seek.value / 1000 * curDur(el); seeking = false; };
 
 $("#vol").oninput = () => { muted = false; applyVolume(); fill($("#vol")); };
 $("#mute").onclick = () => { initAudio(); muted = !muted; applyVolume(); };
@@ -516,7 +551,7 @@ $("#clear").onclick = () => {
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
   db = await dbOpen();
   const saved = await dbAll();
-  saved.forEach(r => mkTrack(r.name, r.blob, r.id, r.dur));
+  saved.forEach(r => mkTrack(r.name, r.blob, r.id, r.dv === 2 ? r.dur : 0));
   if (saved.length) { renderList(); $("#title").textContent = tracks[order[0]].name; $("#status").textContent = "Đã khôi phục " + saved.length + " bài, bấm phát để nghe"; }
 })();
 
